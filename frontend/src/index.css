@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Color Palette - Premium HSL Tailored Colors */
+  --primary-h: 270;
+  --primary-s: 76%;
+  --primary-l: 63%;
+  --primary: hsl(var(--primary-h), var(--primary-s), var(--primary-l));
+  --primary-hover: hsl(var(--primary-h), var(--primary-s), 55%);
+  --primary-light: hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.15);
+  
+  --success: #10b981;
+  --success-light: rgba(16, 185, 129, 0.15);
+  --warning: #f59e0b;
+  --warning-light: rgba(245, 158, 11, 0.15);
+  --danger: #ef4444;
+  --danger-light: rgba(239, 68, 68, 0.15);
+  
+  --sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Outfit', var(--sans);
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Theme-specific variables (Default is Dark Mode for WOW factor!) */
+  --bg: #0b0c10;
+  --bg-surface: #12131a;
+  --bg-surface-hover: #181a24;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-focus: hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.4);
+  --text: #9ca3af;
+  --text-h: #f3f4f6;
+  --text-muted: #6b7280;
+  
+  /* Glassmorphism & Shadows */
+  --glass-bg: rgba(18, 19, 26, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
+  
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f1f5f9;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-focus: hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.4);
+  --text: #475569;
+  --text-h: #0f172a;
+  --text-muted: #94a3b8;
+  
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--sans);
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Scrollbar styling for Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg);
+}

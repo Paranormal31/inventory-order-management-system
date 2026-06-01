@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Python FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: inventory_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  # React Production Nginx Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: inventory_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    restart: unless-stopped
+
+# PREMIUM TOUCH: Commented-out local Postgres database for absolute offline capability if required
+#   postgres:
+#     image: postgres:15-alpine
+#     container_name: inventory_db
+#     environment:
+#       - POSTGRES_USER=neondb_owner
+#       - POSTGRES_PASSWORD=local_db_password_here
+#       - POSTGRES_DB=neondb
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#
+# volumes:
+#   postgres_data:
