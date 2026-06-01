@@ -37,6 +37,11 @@ app.add_middleware(
 )
 
 # JWT Setup
+@app.get("/")
+def read_root():
+    return {"message": "backend api running"}
+
+
 JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_key_change_me_in_production")
 JWT_ALGORITHM = "HS256"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
