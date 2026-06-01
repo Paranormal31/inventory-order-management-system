@@ -92,8 +92,16 @@ function App() {
   });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
-  const [mockEmailInput, setMockEmailInput] = useState('');
-  const [mockNameInput, setMockNameInput] = useState('');
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
+
+  // Login fields
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  // Signup fields
+  const [signupName, setSignupName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
 
   // Core Data States
   const [products, setProducts] = useState([]);
@@ -103,12 +111,17 @@ function App() {
   const [error, setError] = useState(null);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'overview');
 
   // Search States
   const [productSearch, setProductSearch] = useState('');
+  const [productFilterMode, setProductFilterMode] = useState('my'); // 'my' | 'all'
+
   const [customerSearch, setCustomerSearch] = useState('');
+  const [customerFilterMode, setCustomerFilterMode] = useState('my'); // 'my' | 'all'
+
   const [orderSearch, setOrderSearch] = useState('');
+  const [orderFilterMode, setOrderFilterMode] = useState('my'); // 'my' | 'all'
 
   // Toast System
   const [toasts, setToasts] = useState([]);
@@ -117,11 +130,9 @@ function App() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null); // null means adding new
   const [productForm, setProductForm] = useState({ sku: '', name: '', price: '', stock: '', description: '' });
-
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
-  const [customerForm, setCustomerForm] = useState({ name: '', email: '', phone: '' });
-
+  const [customerForm, setCustomerForm] = useState({ name: '', phone: '', address: '' });
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [newOrderCustomer, setNewOrderCustomer] = useState('');
   const [newOrderItems, setNewOrderItems] = useState([{ product_id: '', quantity: 1 }]);
@@ -133,6 +144,27 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Persist Active Tab
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
+
+  // Helper to format UTC Date to local dd/mm/yyyy, h:mm AM/PM
+  const formatOrderDateTime = (dateStr) => {
+    if (!dateStr) return '';
+    const utcStr = (dateStr.endsWith('Z') || dateStr.includes('+')) ? dateStr : `${dateStr.replace(' ', 'T')}Z`;
+    const d = new Date(utcStr);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${dd}/${mm}/${yyyy}, ${hours}:${minutes} ${ampm}`;
+  };
 
   // Fetch core data upon login
   useEffect(() => {
@@ -181,40 +213,61 @@ function App() {
     }
   };
 
-  // Auth Operations
-  const handleMockLogin = async (e) => {
+  // Real email + password login
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (!mockNameInput.trim()) {
-      setAuthError('Please enter a display name');
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setAuthError('Email and password are required');
       return;
     }
     setAuthLoading(true);
     setAuthError('');
     try {
-      const emailSuffix = mockNameInput.trim().toLowerCase().replace(/\s+/g, '');
-      const simulatedToken = `mock_token_${emailSuffix}`;
-      
-      const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: simulatedToken })
+        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword })
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Login failed');
       }
-
       const data = await response.json();
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      
+      setToken(data.access_token);
+      setUser(data.user);
+      triggerToast(`Welcome back, ${data.user.name}!`);
+    } catch (err) {
+      console.error("Login fetch error details:", err);
+      setAuthError(`${err.message} (Tried endpoint: POST ${API_BASE_URL}/auth/login)`);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Quick login for testing — auto-fills and submits login for a test account
+  const quickLogin = async (email) => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: '123456' })
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Login failed');
+      }
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
       setToken(data.access_token);
       setUser(data.user);
       triggerToast(`Welcome back, ${data.user.name}!`);
     } catch (err) {
       setAuthError(err.message);
-      triggerToast(err.message, 'danger');
     } finally {
       setAuthLoading(false);
     }
@@ -255,12 +308,13 @@ function App() {
       name: productForm.name.trim(),
       price: parseFloat(productForm.price),
       stock: parseInt(productForm.stock),
-      description: productForm.description.trim() || null
+      description: productForm.description.trim() || null,
+      added_by_id: user?.id || null
     };
 
     try {
       const url = editingProduct 
-        ? `${API_BASE_URL}/products/${editingProduct.id}`
+        ? `${API_BASE_URL}/products/${editingProduct.id}?user_id=${user?.id || ''}`
         : `${API_BASE_URL}/products`;
       const method = editingProduct ? 'PUT' : 'POST';
 
@@ -286,7 +340,7 @@ function App() {
   const handleProductDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this product?")) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/products/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/products/${id}?user_id=${user?.id || ''}`, { method: 'DELETE' });
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.detail || 'Error deleting product');
@@ -297,11 +351,10 @@ function App() {
       triggerToast(err.message, 'danger');
     }
   };
-
   // Customer Operations
   const openCustomerAdd = () => {
     setEditingCustomer(null);
-    setCustomerForm({ name: '', email: '', phone: '' });
+    setCustomerForm({ name: '', phone: '', address: '' });
     setShowCustomerModal(true);
   };
 
@@ -309,8 +362,8 @@ function App() {
     setEditingCustomer(customer);
     setCustomerForm({
       name: customer.name,
-      email: customer.email,
-      phone: customer.phone || ''
+      phone: customer.phone || '',
+      address: customer.address || ''
     });
     setShowCustomerModal(true);
   };
@@ -319,13 +372,15 @@ function App() {
     e.preventDefault();
     const payload = {
       name: customerForm.name.trim(),
-      email: customerForm.email.trim(),
-      phone: customerForm.phone.trim() || null
+      phone: customerForm.phone.trim() || null,
+      address: customerForm.address.trim() || null,
+      email: editingCustomer ? editingCustomer.email : `customer_${Date.now()}@internal.com`,
+      added_by_id: editingCustomer ? editingCustomer.added_by_id : (user?.id || null)
     };
 
     try {
-      const url = editingCustomer
-        ? `${API_BASE_URL}/customers/${editingCustomer.id}`
+      const url = editingCustomer 
+        ? `${API_BASE_URL}/customers/${editingCustomer.id}?user_id=${user?.id || ''}`
         : `${API_BASE_URL}/customers`;
       const method = editingCustomer ? 'PUT' : 'POST';
 
@@ -349,9 +404,9 @@ function App() {
   };
 
   const handleCustomerDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this customer? All associated orders will be deleted!")) return;
+    if (!window.confirm("Are you sure you want to delete this customer? This will also cascade delete all their orders.")) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/customers/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/customers/${id}?user_id=${user?.id || ''}`, { method: 'DELETE' });
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.detail || 'Error deleting customer');
@@ -362,6 +417,7 @@ function App() {
       triggerToast(err.message, 'danger');
     }
   };
+
 
   // Order Operations
   const addOrderItemRow = () => {
@@ -409,7 +465,8 @@ function App() {
 
     const payload = {
       customer_id: parseInt(newOrderCustomer),
-      items: filteredItems
+      items: filteredItems,
+      added_by_id: user?.id || null
     };
 
     try {
@@ -436,7 +493,7 @@ function App() {
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status?user_id=${user?.id || ''}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -454,6 +511,25 @@ function App() {
     }
   };
 
+  const handleDeleteOrder = async (orderId) => {
+    if (!window.confirm("Are you sure you want to delete this order? This will restock all its items.")) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders/${orderId}?user_id=${user?.id || ''}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || 'Failed to delete order');
+      }
+
+      triggerToast('Order deleted successfully! Stock levels updated.');
+      fetchData();
+    } catch (err) {
+      triggerToast(err.message, 'danger');
+    }
+  };
+
   // Stats Calculations
   const stats = useMemo(() => {
     let totalStock = 0;
@@ -462,30 +538,34 @@ function App() {
     let totalInventoryValue = 0;
     let totalRevenue = 0;
 
-    products.forEach((p) => {
+    const userProducts = products.filter(p => p.added_by_id === user?.id);
+    const userCustomers = customers.filter(c => c.added_by_id === user?.id);
+    const userOrders = orders.filter(o => o.added_by_id === user?.id);
+
+    userProducts.forEach((p) => {
       totalStock += p.stock;
       totalInventoryValue += (p.stock * parseFloat(p.price));
       if (p.stock === 0) outOfStockCount++;
       if (p.stock < 10) lowStockCount++;
     });
 
-    orders.forEach((o) => {
+    userOrders.forEach((o) => {
       if (o.status === 'completed') {
         totalRevenue += parseFloat(o.total_price);
       }
     });
 
     return {
-      totalProducts: products.length,
+      totalProducts: userProducts.length,
       totalStock,
       lowStockCount,
       outOfStockCount,
       totalInventoryValue: totalInventoryValue.toFixed(2),
-      totalCustomers: customers.length,
-      totalOrders: orders.length,
+      totalCustomers: userCustomers.length,
+      totalOrders: userOrders.length,
       totalRevenue: totalRevenue.toFixed(2)
     };
-  }, [products, customers, orders]);
+  }, [products, customers, orders, user]);
 
   // Category Value Breakdown for Inventory Tab
   const categoryValues = useMemo(() => {
@@ -493,7 +573,8 @@ function App() {
     let compute = 0;
     let storage = 0;
     let accessories = 0;
-    products.forEach((p) => {
+    const userProducts = products.filter(p => p.added_by_id === user?.id);
+    userProducts.forEach((p) => {
       const name = p.name.toLowerCase();
       const sku = p.sku.toLowerCase();
       const value = p.stock * parseFloat(p.price);
@@ -523,27 +604,44 @@ function App() {
 
   // Filtering Lists
   const filteredProducts = useMemo(() => {
-    if (!productSearch) return products;
+    let sorted = [...products].sort((a, b) => 
+      a.sku.localeCompare(b.sku, undefined, { numeric: true, sensitivity: 'base' })
+    );
+    if (productFilterMode === 'my') {
+      sorted = sorted.filter((p) => p.added_by_id === user?.id);
+    }
+    if (!productSearch) return sorted;
     const s = productSearch.toLowerCase();
-    return products.filter((p) => p.sku.toLowerCase().includes(s) || p.name.toLowerCase().includes(s));
-  }, [products, productSearch]);
-
+    return sorted.filter((p) => p.sku.toLowerCase().includes(s) || p.name.toLowerCase().includes(s));
+  }, [products, productSearch, productFilterMode, user]);
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers;
+    let filtered = customers.filter((c) => !c.email || c.email.endsWith('@internal.com'));
+    if (customerFilterMode === 'my') {
+      filtered = filtered.filter((c) => c.added_by_id === user?.id);
+    }
+    if (!customerSearch) return filtered;
     const s = customerSearch.toLowerCase();
-    return customers.filter((c) => c.name.toLowerCase().includes(s) || c.email.toLowerCase().includes(s));
-  }, [customers, customerSearch]);
-
+    return filtered.filter(
+      (c) =>
+        c.name.toLowerCase().includes(s) ||
+        (c.phone && c.phone.toLowerCase().includes(s)) ||
+        (c.address && c.address.toLowerCase().includes(s))
+    );
+  }, [customers, customerSearch, customerFilterMode, user]);
   const filteredOrders = useMemo(() => {
-    if (!orderSearch) return orders;
+    let filtered = [...orders];
+    if (orderFilterMode === 'my') {
+      filtered = filtered.filter((o) => o.added_by_id === user?.id);
+    }
+    if (!orderSearch) return filtered;
     const s = orderSearch.toLowerCase();
-    return orders.filter(
+    return filtered.filter(
       (o) =>
         o.id.toString().includes(s) ||
         o.customer.name.toLowerCase().includes(s) ||
         o.status.toLowerCase().includes(s)
     );
-  }, [orders, orderSearch]);
+  }, [orders, orderSearch, orderFilterMode, user]);
 
   // Helper: map product ID to product object
   const productMap = useMemo(() => {
@@ -555,49 +653,260 @@ function App() {
     return map;
   }, [products]);
 
-  // Theme Toggler Component
-  const themeToggle = (
-    <button
-      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      className="theme-toggler"
-      title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-    >
-      {theme === 'dark' ? <Icons.ThemeLight /> : <Icons.ThemeDark />}
-    </button>
-  );
 
-  // Render Login screen if not authenticated
+  // Signup handler — calls real /auth/signup endpoint
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    if (!signupName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
+      setAuthError('Name, email and password are required');
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: signupName.trim(), email: signupEmail.trim(), password: signupPassword })
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Registration failed');
+      }
+      const data = await response.json();
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setToken(data.access_token);
+      setUser(data.user);
+      triggerToast(`Welcome aboard, ${data.user.name}! 🎉`);
+    } catch (err) {
+      console.error("Signup fetch error details:", err);
+      setAuthError(`${err.message} (Tried endpoint: POST ${API_BASE_URL}/auth/signup)`);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Render Login / Signup screen if not authenticated
   if (!token) {
     return (
-      <div className="login-container">
-        <div className="login-card">
-          <div className="login-card-header">
-            <h1 className="brand-title">{t('Inventory Hub')}</h1>
-            <p className="brand-subtitle">{t('Order & Inventory Management System')}</p>
+      <div className="auth-page">
+        {/* Left decorative panel */}
+        <div className="auth-hero">
+          <div className="auth-hero-content">
+            <h1 className="auth-hero-title">{t('Inventory & Order Management System')}</h1>
+            <ul className="auth-feature-list">
+              <li><span className="auth-feature-dot" style={{ background: 'var(--primary)' }}></span>{t('Real-time stock tracking')}</li>
+            </ul>
           </div>
-          
-          <form onSubmit={handleMockLogin} className="login-form">
-            <div className="form-group">
-              <label>{t('Simulated Username / Full Name')}</label>
-              <input
-                type="text"
-                placeholder="e.g. John Doe"
-                value={mockNameInput}
-                onChange={(e) => setMockNameInput(e.target.value)}
-                required
-              />
+        </div>
+
+
+        {/* Right auth card */}
+        <div className="auth-panel">
+          <div className="auth-card">
+            {/* Mode tabs */}
+            <div className="auth-tabs">
+              <button
+                className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
+                onClick={() => { setAuthMode('login'); setAuthError(''); }}
+              >
+                {t('Sign In')}
+              </button>
+              <button
+                className={`auth-tab ${authMode === 'signup' ? 'active' : ''}`}
+                onClick={() => { setAuthMode('signup'); setAuthError(''); }}
+              >
+                {t('Create Account')}
+              </button>
             </div>
 
-            <button type="submit" disabled={authLoading} className="btn btn-primary w-full">
-              {authLoading ? 'Signing in...' : 'Sign In with Mock Account'}
-            </button>
+            {/* LOGIN FORM */}
+            {authMode === 'login' && (
+              <form onSubmit={handleLogin} className="auth-form" key="login">
+                <div className="auth-form-header">
+                  <h2>{t('Welcome back')}</h2>
+                  <p>{t('Sign in to your workspace')}</p>
+                </div>
 
-            {authError && <div className="alert alert-danger">{authError}</div>}
-          </form>
+                {/* Quick Login Test Accounts */}
+                <div className="quick-login-section" style={{ marginBottom: '16px' }}>
+                  <div className="quick-login-divider" style={{ marginTop: '0px', marginBottom: '12px' }}>
+                    <span>{t('QUICK LOGIN (TEST ACCOUNT WITH SEEDED DATA)')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary auth-submit-btn"
+                    style={{ marginBottom: '12px', background: 'linear-gradient(135deg, #0d9488, #0891b2)' }}
+                    onClick={() => quickLogin('Manager1@temp.com')}
+                    disabled={authLoading}
+                  >
+                    🔑 {t('Login as Manager1')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary auth-submit-btn"
+                    style={{ marginBottom: '12px', background: 'linear-gradient(135deg, #0f766e, #0d9488)' }}
+                    onClick={() => quickLogin('NewUser@temp.com')}
+                    disabled={authLoading}
+                  >
+                    🔑 {t('Login as New User (Fresh Account - No Seeded Data)')}
+                  </button>
+                  <div className="quick-login-other">
+                    <select
+                      className="quick-login-select"
+                      defaultValue=""
+                      onChange={(e) => { if (e.target.value) quickLogin(e.target.value); }}
+                      disabled={authLoading}
+                    >
+                      <option value="" disabled>{t('Other test accounts...')}</option>
+                      {['Manager2'].map((name) => (
+                        <option key={name} value={`${name}@temp.com`}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-          <div className="login-footer">
-            <p>{t('Mock login bypasses Google Auth to allow swift local testing.')}</p>
-            {themeToggle}
+                <div className="form-group">
+                  <label>{t('Email Address')}</label>
+                  <input
+                    type="email"
+                    placeholder="jane@company.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>{t('Password')}</label>
+                  <input
+                    type="password"
+                    placeholder="Your password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {authError && <div className="alert alert-danger">{authError}</div>}
+
+                <button type="submit" disabled={authLoading} className="btn btn-primary auth-submit-btn">
+                  {authLoading ? (
+                    <><span className="spinner-sm"></span> {t('Signing in...')}</>
+                  ) : t('Sign In')}
+                </button>
+
+                <p className="auth-switch-hint">
+                  {t("Don't have an account?")}{' '}
+                  <button type="button" className="btn-link" onClick={() => { setAuthMode('signup'); setAuthError(''); }}>
+                    {t('Create one')}
+                  </button>
+                </p>
+              </form>
+            )}
+
+            {/* SIGNUP FORM */}
+            {authMode === 'signup' && (
+              <form onSubmit={handleSignup} className="auth-form" key="signup">
+                <div className="auth-form-header">
+                  <h2>{t('Create account')}</h2>
+                  <p>{t('Get started with Inventory & Order Management System')}</p>
+                </div>
+
+                {/* Quick Login Test Accounts */}
+                <div className="quick-login-section" style={{ marginBottom: '16px' }}>
+                  <div className="quick-login-divider" style={{ marginTop: '0px', marginBottom: '12px' }}>
+                    <span>{t('QUICK LOGIN (TEST ACCOUNT WITH SEEDED DATA)')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary auth-submit-btn"
+                    style={{ marginBottom: '12px', background: 'linear-gradient(135deg, #0d9488, #0891b2)' }}
+                    onClick={() => quickLogin('Manager1@temp.com')}
+                    disabled={authLoading}
+                  >
+                    🔑 {t('Login as Manager1')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary auth-submit-btn"
+                    style={{ marginBottom: '12px', background: 'linear-gradient(135deg, #0f766e, #0d9488)' }}
+                    onClick={() => quickLogin('NewUser@temp.com')}
+                    disabled={authLoading}
+                  >
+                    🔑 {t('Login as New User (Fresh Account - No Seeded Data)')}
+                  </button>
+                  <div className="quick-login-other">
+                    <select
+                      className="quick-login-select"
+                      defaultValue=""
+                      onChange={(e) => { if (e.target.value) quickLogin(e.target.value); }}
+                      disabled={authLoading}
+                    >
+                      <option value="" disabled>{t('Other test accounts...')}</option>
+                      {['Manager2'].map((name) => (
+                        <option key={name} value={`${name}@temp.com`}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>{t('Full Name')} <span className="required-star">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="Jane Smith"
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>{t('Email Address')} <span className="required-star">*</span></label>
+                  <input
+                    type="email"
+                    placeholder="jane@company.com"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>{t('Password')} <span className="required-star">*</span></label>
+                  <input
+                    type="password"
+                    placeholder="Create a password"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {authError && <div className="alert alert-danger">{authError}</div>}
+
+                <button type="submit" disabled={authLoading} className="btn btn-primary auth-submit-btn">
+                  {authLoading ? (
+                    <><span className="spinner-sm"></span> Creating account...</>
+                  ) : 'Create Account'}
+                </button>
+
+                <p className="auth-switch-hint">
+                  Already have an account?{' '}
+                  <button type="button" className="btn-link" onClick={() => { setAuthMode('login'); setAuthError(''); }}>
+                    Sign in
+                  </button>
+                </p>
+              </form>
+            )}
           </div>
         </div>
 
@@ -619,10 +928,8 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div>
-            <h2>{t('Obsidian IMS')}</h2>
-            <p className="text-xs text-muted mt-1">{t('Enterprise Plan')}</p>
+            <h2>{t('Inventory & Order Management System')}</h2>
           </div>
-          <span className="premium-badge">{t('PRO')}</span>
         </div>
 
         {/* Navigation Links */}
@@ -641,7 +948,6 @@ function App() {
           >
             <Icons.Products />
             <span>{t('Products')}</span>
-            {stats.lowStockCount > 0 && <span className="badge-danger">{stats.lowStockCount}</span>}
           </button>
 
           <button
@@ -651,6 +957,7 @@ function App() {
             <Icons.Customers />
             <span>{t('Customers')}</span>
           </button>
+
 
           <button
             onClick={() => setActiveTab('orders')}
@@ -681,7 +988,6 @@ function App() {
             </div>
           </div>
           <div className="sidebar-footer-actions">
-            {themeToggle}
             <button onClick={handleLogout} className="btn-icon" title="Logout">
               <Icons.Logout />
             </button>
@@ -699,9 +1005,6 @@ function App() {
           
           <div className="header-actions">
             {loading && <div className="spinner"></div>}
-            <button onClick={fetchData} className="btn btn-secondary">
-              {t('Refresh Data')}
-            </button>
           </div>
         </header>
 
@@ -732,7 +1035,7 @@ function App() {
                   <div className="kpi-icon text-success"><Icons.Cart /></div>
                   <div className="kpi-data">
                     <span className="kpi-title">{t('Revenue')}</span>
-                    <span className="kpi-value">${stats.totalRevenue}</span>
+                    <span className="kpi-value">₹{stats.totalRevenue}</span>
                   </div>
                 </div>
 
@@ -744,76 +1047,10 @@ function App() {
                   </div>
                 </div>
 
-                <div className="kpi-card">
-                  <div className="kpi-icon text-info"><Icons.Customers /></div>
-                  <div className="kpi-data">
-                    <span className="kpi-title">{t('Total Customers')}</span>
-                    <span className="kpi-value">{stats.totalCustomers}</span>
-                  </div>
-                </div>
+
               </div>
 
-              {/* Bento Grid: Analytics & Status */}
-              <div className="dashboard-columns m-b-2" style={{ gridTemplateColumns: '2fr 1fr', marginBottom: '24px' }}>
-                {/* Simulated Revenue & Activity Line Chart */}
-                <div className="panel card" style={{ height: '380px' }}>
-                  <div className="panel-header flex-between">
-                    <h3>{t('Orders Volume Over Time')}</h3>
-                    <span className="font-mono text-xs text-muted">{t('Last 7 Days')}</span>
-                  </div>
-                  <div className="panel-body flex" style={{ flexDirection: 'column', height: '100%' }}>
-                    <div className="flex-1 w-full bg-surface-container-low rounded border border-outline relative overflow-hidden flex items-end p-4 gap-2" style={{ minHeight: '200px' }}>
-                      {/* Interactive Visual Graph Bars */}
-                      <div className="w-full h-3/5 flex items-end justify-between gap-1 opacity-70">
-                        <div className="w-full bg-primary-light h-1/4 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Mon: 12 orders')}</div>
-                        </div>
-                        <div className="w-full bg-primary-light h-2/5 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Tue: 22 orders')}</div>
-                        </div>
-                        <div className="w-full bg-primary-light h-3/5 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Wed: 35 orders')}</div>
-                        </div>
-                        <div className="w-full bg-primary-light h-1/2 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Thu: 28 orders')}</div>
-                        </div>
-                        <div className="w-full bg-primary-light h-4/5 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Fri: 46 orders')}</div>
-                        </div>
-                        <div className="w-full bg-primary-light h-3/4 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Sat: 40 orders')}</div>
-                        </div>
-                        <div className="w-full bg-primary h-full rounded-t-sm cursor-pointer relative group">
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Sun: 55 orders')}</div>
-                        </div>
-                      </div>
-                      <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                        <path d="M0,70 Q15,45 30,55 T60,30 T85,15 T100,5" fill="none" stroke="var(--primary)" strokeWidth="2" vectorEffect="non-scaling-stroke"></path>
-                      </svg>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Stock Value Turnover Gauge dial */}
-                <div className="panel card" style={{ height: '380px' }}>
-                  <div className="panel-header">
-                    <h3>{t('Stock Turnover')}</h3>
-                  </div>
-                  <div className="panel-body circular-gauge-container">
-                    <div className="circular-gauge">
-                      <span className="gauge-value">{t('4.2x')}</span>
-                    </div>
-                    <span className="text-xs text-muted block text-center" style={{ marginBottom: '16px' }}>{t('Optimal Logistics Velocity')}</span>
-                    <div className="w-full bg-surface-container-low" style={{ height: '6px', borderRadius: '99px', overflow: 'hidden' }}>
-                      <div className="bg-primary h-full" style={{ width: '70%' }}></div>
-                    </div>
-                    <div className="flex-between text-[10px] text-muted font-mono w-full" style={{ marginTop: '8px', textTransform: 'uppercase' }}>
-                      <span>{t('Slow')}</span>
-                      <span>{t('Optimal')}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
               {/* Secondary stats & alerts */}
               <div className="dashboard-columns">
@@ -823,13 +1060,13 @@ function App() {
                     <h3>{t('Low Stock Alert (')}{stats.lowStockCount}{t(')')}</h3>
                   </div>
                     <div className="panel-body">
-                    {products.filter(p => p.stock < 10).length === 0 ? (
+                    {products.filter(p => p.stock < 10 && p.added_by_id === user?.id).length === 0 ? (
                       <div className="no-data">
                         <p>{t('All products are healthy in stock!')}</p>
                       </div>
                     ) : (
                       <div className="alert-list">
-                        {products.filter(p => p.stock < 10).map((p) => (
+                        {products.filter(p => p.stock < 10 && p.added_by_id === user?.id).map((p) => (
                           <div key={p.id} className="alert-item card">
                             <div>
                               <strong>{p.name}</strong>
@@ -854,20 +1091,20 @@ function App() {
                     <button onClick={() => setActiveTab('orders')} className="btn-text" style={{ fontSize: '12px' }}>{t('View All')}</button>
                   </div>
                   <div className="panel-body">
-                    {orders.length === 0 ? (
+                    {orders.filter(o => o.added_by_id === user?.id).length === 0 ? (
                       <div className="no-data">
                         <p>{t('No orders recorded yet.')}</p>
                       </div>
                     ) : (
                       <div className="recent-orders-list">
-                        {orders.slice(0, 5).map((o) => (
+                        {orders.filter(o => o.added_by_id === user?.id).slice(0, 5).map((o) => (
                           <div key={o.id} className="recent-order-item card">
                             <div>
                               <strong>{t('Order #')}{o.id}</strong>
                               <span className="text-xs text-muted block">{o.customer.name}</span>
                             </div>
                             <div className="text-right">
-                              <span className="recent-order-price font-mono">${parseFloat(o.total_price).toFixed(2)}</span>
+                              <span className="recent-order-price font-mono">₹{parseFloat(o.total_price).toFixed(2)}</span>
                               <span className={`status-badge badge-${o.status}`}>
                                 {o.status}
                               </span>
@@ -886,14 +1123,52 @@ function App() {
           {activeTab === 'products' && (
             <div className="tab-pane">
               <div className="table-controls card">
-                <div className="search-wrapper">
-                  <Icons.Search />
-                  <input
-                    type="text"
-                    placeholder="Search products by SKU or Name..."
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                  />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                  <div className="search-wrapper" style={{ margin: 0, flex: 1, maxWidth: '400px' }}>
+                    <Icons.Search />
+                    <input
+                      type="text"
+                      placeholder="Search products by SKU or Name..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="toggle-segmented" style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '10px', padding: '4px' }}>
+                    <button 
+                      onClick={() => setProductFilterMode('my')} 
+                      className={`btn ${productFilterMode === 'my' ? 'btn-primary' : ''}`}
+                      style={{ 
+                        padding: '6px 16px', 
+                        fontSize: '12px', 
+                        borderRadius: '6px',
+                        background: productFilterMode === 'my' ? 'var(--btn-primary-bg)' : 'transparent',
+                        color: productFilterMode === 'my' ? 'var(--btn-primary-text)' : 'var(--text-muted)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {t('My Products')}
+                    </button>
+                    <button 
+                      onClick={() => setProductFilterMode('all')} 
+                      className={`btn ${productFilterMode === 'all' ? 'btn-primary' : ''}`}
+                      style={{ 
+                        padding: '6px 16px', 
+                        fontSize: '12px', 
+                        borderRadius: '6px',
+                        background: productFilterMode === 'all' ? 'var(--btn-primary-bg)' : 'transparent',
+                        color: productFilterMode === 'all' ? 'var(--btn-primary-text)' : 'var(--text-muted)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {t('All Products')}
+                    </button>
+                  </div>
                 </div>
                 <button onClick={openProductAdd} className="btn btn-primary">
                   <Icons.Add /> Add Product
@@ -908,6 +1183,7 @@ function App() {
                       <th>{t('Product Name')}</th>
                       <th>{t('Price')}</th>
                       <th>{t('Stock Quantity')}</th>
+                      <th>{t('Added By')}</th>
                       <th>{t('Description')}</th>
                       <th className="actions-header">{t('Actions')}</th>
                     </tr>
@@ -915,27 +1191,40 @@ function App() {
                   <tbody>
                     {filteredProducts.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="no-data-cell">{t('No products found.')}</td>
+                        <td colSpan="7" className="no-data-cell">{t('No products found.')}</td>
                       </tr>
                     ) : (
                       filteredProducts.map((p) => (
                         <tr key={p.id} className={p.stock < 10 ? 'row-warning' : ''}>
                           <td className="font-mono">{p.sku}</td>
                           <td><strong>{p.name}</strong></td>
-                          <td>${parseFloat(p.price).toFixed(2)}</td>
+                          <td>₹{parseFloat(p.price).toFixed(2)}</td>
                           <td>
                             <span className={`stock-pill ${p.stock === 0 ? 'zero' : p.stock < 10 ? 'low' : 'healthy'}`}>
                               {p.stock}
                             </span>
                           </td>
+                          <td>
+                            {p.added_by ? (
+                              <span className="user-badge" title={p.added_by.email}>
+                                {p.added_by.name}
+                              </span>
+                            ) : (
+                              <span className="text-muted italic">{t('System')}</span>
+                            )}
+                          </td>
                           <td className="text-ellipsis">{p.description || '-'}</td>
                           <td className="actions-cell">
-                            <button onClick={() => openProductEdit(p)} className="btn-icon text-primary" title="Edit">
-                              <Icons.Edit />
-                            </button>
-                            <button onClick={() => handleProductDelete(p.id)} className="btn-icon text-danger" title="Delete">
-                              <Icons.Delete />
-                            </button>
+                            {(!p.added_by_id || p.added_by_id === user?.id) && (
+                              <>
+                                <button onClick={() => openProductEdit(p)} className="btn-icon text-primary" title="Edit">
+                                  <Icons.Edit />
+                                </button>
+                                <button onClick={() => handleProductDelete(p.id)} className="btn-icon text-danger" title="Delete">
+                                  <Icons.Delete />
+                                </button>
+                              </>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -945,22 +1234,59 @@ function App() {
               </div>
             </div>
           )}
-
           {/* TAB 3: CUSTOMERS */}
           {activeTab === 'customers' && (
             <div className="tab-pane">
               <div className="table-controls card">
-                <div className="search-wrapper">
-                  <Icons.Search />
-                  <input
-                    type="text"
-                    placeholder="Search customers by Name or Email..."
-                    value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
-                  />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                  <div className="search-wrapper" style={{ margin: 0, flex: 1, maxWidth: '400px' }}>
+                    <Icons.Search />
+                    <input
+                      type="text"
+                      placeholder={t("Search customers by Name, Phone or Address...")}
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="toggle-segmented" style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '10px', padding: '4px' }}>
+                    <button 
+                      onClick={() => setCustomerFilterMode('my')} 
+                      className={`btn ${customerFilterMode === 'my' ? 'btn-primary' : ''}`}
+                      style={{ 
+                        padding: '6px 16px', 
+                        fontSize: '12px', 
+                        borderRadius: '6px',
+                        background: customerFilterMode === 'my' ? 'var(--btn-primary-bg)' : 'transparent',
+                        color: customerFilterMode === 'my' ? 'var(--btn-primary-text)' : 'var(--text-muted)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {t('My Customers')}
+                    </button>
+                    <button 
+                      onClick={() => setCustomerFilterMode('all')} 
+                      className={`btn ${customerFilterMode === 'all' ? 'btn-primary' : ''}`}
+                      style={{ 
+                        padding: '6px 16px', 
+                        fontSize: '12px', 
+                        borderRadius: '6px',
+                        background: customerFilterMode === 'all' ? 'var(--btn-primary-bg)' : 'transparent',
+                        color: customerFilterMode === 'all' ? 'var(--btn-primary-text)' : 'var(--text-muted)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {t('All Customers')}
+                    </button>
+                  </div>
                 </div>
                 <button onClick={openCustomerAdd} className="btn btn-primary">
-                  <Icons.Add /> Add Customer
+                  <Icons.Add /> {t('Add Customer')}
                 </button>
               </div>
 
@@ -968,32 +1294,44 @@ function App() {
                 <table>
                   <thead>
                     <tr>
-                      <th>{t('Customer ID')}</th>
-                      <th>{t('Full Name')}</th>
-                      <th>{t('Email Address')}</th>
-                      <th>{t('Phone Number')}</th>
+                      <th>{t('Customer Name')}</th>
+                      <th>{t('Contact Number')}</th>
+                      <th>{t('Address')}</th>
+                      <th>{t('Customer Added By')}</th>
                       <th className="actions-header">{t('Actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCustomers.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="no-data-cell">{t('No customers registered.')}</td>
+                        <td colSpan="5" className="no-data-cell">{t('No customers found.')}</td>
                       </tr>
                     ) : (
                       filteredCustomers.map((c) => (
                         <tr key={c.id}>
-                          <td>#{c.id}</td>
                           <td><strong>{c.name}</strong></td>
-                          <td>{c.email}</td>
-                          <td>{c.phone || '-'}</td>
+                          <td>{c.phone || <span className="text-muted italic">-</span>}</td>
+                          <td>{c.address || <span className="text-muted italic">-</span>}</td>
+                          <td>
+                            {c.added_by ? (
+                              <span className="user-badge" title={c.added_by.email}>
+                                {c.added_by.name}
+                              </span>
+                            ) : (
+                              <span className="text-muted italic">{t('System')}</span>
+                            )}
+                          </td>
                           <td className="actions-cell">
-                            <button onClick={() => openCustomerEdit(c)} className="btn-icon text-primary" title="Edit">
-                              <Icons.Edit />
-                            </button>
-                            <button onClick={() => handleCustomerDelete(c.id)} className="btn-icon text-danger" title="Delete">
-                              <Icons.Delete />
-                            </button>
+                            {(!c.added_by_id || c.added_by_id === user?.id) && (
+                              <>
+                                <button onClick={() => openCustomerEdit(c)} className="btn-icon text-primary" title={t("Edit")}>
+                                  <Icons.Edit />
+                                </button>
+                                <button onClick={() => handleCustomerDelete(c.id)} className="btn-icon text-danger" title={t("Delete")}>
+                                  <Icons.Delete />
+                                </button>
+                              </>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -1004,18 +1342,57 @@ function App() {
             </div>
           )}
 
+
           {/* TAB 4: ORDERS */}
           {activeTab === 'orders' && (
             <div className="tab-pane">
-              <div className="table-controls">
-                <div className="search-wrapper">
-                  <Icons.Search />
-                  <input
-                    type="text"
-                    placeholder="Search orders..."
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                  />
+              <div className="table-controls card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                  <div className="search-wrapper" style={{ margin: 0, flex: 1, maxWidth: '400px' }}>
+                    <Icons.Search />
+                    <input
+                      type="text"
+                      placeholder="Search orders..."
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="toggle-segmented" style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '10px', padding: '4px' }}>
+                    <button 
+                      onClick={() => setOrderFilterMode('my')} 
+                      className={`btn ${orderFilterMode === 'my' ? 'btn-primary' : ''}`}
+                      style={{ 
+                        padding: '6px 16px', 
+                        fontSize: '12px', 
+                        borderRadius: '6px',
+                        background: orderFilterMode === 'my' ? 'var(--btn-primary-bg)' : 'transparent',
+                        color: orderFilterMode === 'my' ? 'var(--btn-primary-text)' : 'var(--text-muted)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {t('My Orders')}
+                    </button>
+                    <button 
+                      onClick={() => setOrderFilterMode('all')} 
+                      className={`btn ${orderFilterMode === 'all' ? 'btn-primary' : ''}`}
+                      style={{ 
+                        padding: '6px 16px', 
+                        fontSize: '12px', 
+                        borderRadius: '6px',
+                        background: orderFilterMode === 'all' ? 'var(--btn-primary-bg)' : 'transparent',
+                        color: orderFilterMode === 'all' ? 'var(--btn-primary-text)' : 'var(--text-muted)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {t('All Orders')}
+                    </button>
+                  </div>
                 </div>
                 <button onClick={() => setShowOrderModal(true)} className="btn btn-primary">
                   <Icons.Add /> Place New Order
@@ -1028,16 +1405,24 @@ function App() {
                     <div className="panel-body no-data">{t('No orders match the search.')}</div>
                   </div>
                 ) : (
-                  filteredOrders.map((o) => (
+                  filteredOrders.map((o, idx) => (
                     <div key={o.id} className={`order-card panel card ${expandedOrder === o.id ? 'expanded' : ''}`}>
                       <div className="order-card-header" onClick={() => setExpandedOrder(expandedOrder === o.id ? null : o.id)}>
                         <div className="order-main-info">
-                          <span className="order-id">{t('Order #')}{o.id}</span>
-                          <span className="order-date">{new Date(o.created_at).toLocaleString()}</span>
+                          <span className="order-id">{t('Order #')}{idx + 1}</span>
+                          <span className="order-date-divider" style={{ margin: '0 8px', color: 'var(--text-muted)' }}>•</span>
+                          <span className="order-date">{formatOrderDateTime(o.created_at)}</span>
                         </div>
                         <div className="order-meta-info" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                          {o.added_by ? (
+                            <span className="user-badge" title={o.added_by.email} style={{ fontSize: '11px' }}>
+                              {o.added_by.name}
+                            </span>
+                          ) : (
+                            <span className="text-muted italic" style={{ fontSize: '11px' }}>{t('System')}</span>
+                          )}
                           <span className="order-customer"><strong>{o.customer.name}</strong></span>
-                          <span className="order-price font-mono">${parseFloat(o.total_price).toFixed(2)}</span>
+                          <span className="order-price font-mono">₹{parseFloat(o.total_price).toFixed(2)}</span>
                           <span className={`status-badge badge-${o.status}`}>{o.status}</span>
                           <button className="btn-icon">
                             <Icons.ChevronDown />
@@ -1065,10 +1450,10 @@ function App() {
                                       <strong>{item.product.name}</strong>
                                       <span className="text-xs text-muted block font-mono">{t('SKU: ')}{item.product.sku}</span>
                                     </td>
-                                    <td className="text-right">${parseFloat(item.price_at_order).toFixed(2)}</td>
+                                    <td className="text-right">₹{parseFloat(item.price_at_order).toFixed(2)}</td>
                                     <td className="text-right">x {item.quantity}</td>
                                     <td className="text-right">
-                                      <strong>${(parseFloat(item.price_at_order) * item.quantity).toFixed(2)}</strong>
+                                      <strong>₹{(parseFloat(item.price_at_order) * item.quantity).toFixed(2)}</strong>
                                     </td>
                                   </tr>
                                 ))}
@@ -1076,31 +1461,48 @@ function App() {
                             </table>
                           </div>
 
-                          <div className="status-management" style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <span className="text-sm font-medium">{t('Update Status:')}</span>
-                            <div className="flex gap-2" style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'pending'); }}
-                                className={`btn btn-secondary ${o.status === 'pending' ? 'active' : ''}`}
-                                style={{ padding: '6px 12px', fontSize: '12px' }}
-                              >
-                                Pending
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'completed'); }}
-                                className={`btn btn-secondary ${o.status === 'completed' ? 'active' : ''}`}
-                                style={{ padding: '6px 12px', fontSize: '12px' }}
-                              >
-                                Completed
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'cancelled'); }}
-                                className={`btn btn-secondary ${o.status === 'cancelled' ? 'active' : ''}`}
-                                style={{ padding: '6px 12px', fontSize: '12px' }}
-                              >
-                                Cancel
-                              </button>
+                          <div className="status-management" style={{ marginTop: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                              {(!o.added_by_id || o.added_by_id === user?.id) ? (
+                                <>
+                                  <span className="text-sm font-medium">{t('Update Status:')}</span>
+                                  <div className="flex gap-2" style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'pending'); }}
+                                      className={`btn btn-secondary ${o.status === 'pending' ? 'active' : ''}`}
+                                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                                    >
+                                      Pending
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'completed'); }}
+                                      className={`btn btn-secondary ${o.status === 'completed' ? 'active' : ''}`}
+                                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                                    >
+                                      Completed
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'cancelled'); }}
+                                      className={`btn btn-secondary ${o.status === 'cancelled' ? 'active' : ''}`}
+                                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="text-sm text-muted italic">{t('Only the user who placed this order can manage it.')}</span>
+                              )}
                             </div>
+                            {(!o.added_by_id || o.added_by_id === user?.id) && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteOrder(o.id); }}
+                                className="btn btn-danger"
+                                style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <Icons.Delete /> {t('Delete Order')}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1136,7 +1538,7 @@ function App() {
                   <div className="kpi-icon text-primary"><Icons.Cart /></div>
                   <div className="kpi-data">
                     <span className="kpi-title">{t('Inventory Value')}</span>
-                    <span className="kpi-value">${parseFloat(stats.totalInventoryValue).toLocaleString()}</span>
+                    <span className="kpi-value">₹{parseFloat(stats.totalInventoryValue).toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -1160,33 +1562,26 @@ function App() {
                       <thead>
                         <tr>
                           <th>{t('Product / SKU')}</th>
-                          <th>{t('Location')}</th>
                           <th className="text-right">{t('Stock')}</th>
                           <th className="text-center">{t('Status')}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {products.length === 0 ? (
+                        {products.filter(p => p.added_by_id === user?.id).length === 0 ? (
                           <tr>
-                            <td colSpan="4" className="no-data">{t('No products in database.')}</td>
+                            <td colSpan="3" className="no-data">{t('No products in database.')}</td>
                           </tr>
                         ) : (
-                          products.map((p) => {
-                            const getShelfLocation = (id) => {
-                              const idx = id % 5;
-                              if (idx === 0) return 'WH-Alpha A-04';
-                              if (idx === 1) return 'WH-Beta B-12';
-                              if (idx === 2) return 'WH-Alpha Z-12';
-                              if (idx === 3) return 'WH-Beta C-15';
-                              return 'WH-Alpha X-01';
-                            };
+                          products
+                            .filter(p => p.added_by_id === user?.id)
+                            .sort((a, b) => a.stock - b.stock)
+                            .map((p) => {
                             return (
                               <tr key={p.id}>
                                 <td>
                                   <strong>{p.name}</strong>
                                   <span className="text-xs text-muted block font-mono">{p.sku}</span>
                                 </td>
-                                <td>{getShelfLocation(p.id)}</td>
                                 <td className="text-right font-mono"><strong>{p.stock}</strong></td>
                                 <td className="text-center">
                                   <span className={`status-badge ${p.stock === 0 ? 'badge-cancelled' : p.stock < 10 ? 'badge-pending' : 'badge-completed'}`}>
@@ -1202,31 +1597,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="panel card">
-                  <div className="panel-header">
-                    <h3>{t('Value by Category')}</h3>
-                  </div>
-                  <div className="panel-body">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                      {[
-                        { label: 'Networking', val: categoryValues.networking, pct: categoryValues.netPct, color: 'var(--primary)' },
-                        { label: 'Compute', val: categoryValues.compute, pct: categoryValues.compPct, color: '#60a5fa' },
-                        { label: 'Storage', val: categoryValues.storage, pct: categoryValues.storePct, color: 'var(--success)' },
-                        { label: 'Accessories', val: categoryValues.accessories, pct: categoryValues.accPct, color: 'var(--warning)' }
-                      ].map((cat, i) => (
-                        <div key={i}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
-                            <span>{cat.label}</span>
-                            <span className="font-mono">${parseFloat(cat.val).toLocaleString()}</span>
-                          </div>
-                          <div style={{ height: '6px', backgroundColor: 'var(--bg-surface-high)', borderRadius: '99px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${cat.pct}%`, backgroundColor: cat.color }}></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+
               </div>
             </div>
           )}
@@ -1268,7 +1639,7 @@ function App() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>{t('Unit Price ($)')}</label>
+                    <label>{t('Unit Price (₹)')}</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1319,7 +1690,7 @@ function App() {
         <div className="modal-overlay">
           <div className="modal-card">
             <div className="modal-header">
-              <h3>{editingCustomer ? 'Edit Customer Info' : 'Register Customer'}</h3>
+              <h3>{editingCustomer ? t('Edit Customer') : t('Add New Customer')}</h3>
               <button onClick={() => setShowCustomerModal(false)} className="close-btn">&times;</button>
             </div>
             <form onSubmit={handleCustomerSubmit}>
@@ -1331,41 +1702,41 @@ function App() {
                     required
                     value={customerForm.name}
                     onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
-                    placeholder="e.g. Jane Smith"
+                    placeholder="e.g. John Doe"
                   />
                 </div>
                 <div className="form-group">
-                  <label>{t('Email Address')}</label>
-                  <input
-                    type="email"
-                    required
-                    value={customerForm.email}
-                    onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
-                    placeholder="e.g. jane.smith@gmail.com"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>{t('Phone Number (Optional)')}</label>
+                  <label>{t('Contact Number')}</label>
                   <input
                     type="text"
                     value={customerForm.phone}
                     onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
-                    placeholder="e.g. +1 555-019-2834"
+                    placeholder="e.g. +91 98765 43210"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>{t('Address')}</label>
+                  <textarea
+                    rows="3"
+                    value={customerForm.address}
+                    onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
+                    placeholder="e.g. 123 Main St, New Delhi"
                   />
                 </div>
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setShowCustomerModal(false)} className="btn btn-secondary">
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {editingCustomer ? 'Save Details' : 'Register'}
+                  {editingCustomer ? t('Save Changes') : t('Create Customer')}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
 
       {/* 3. PLACE ORDER MODAL */}
       {showOrderModal && (
@@ -1386,9 +1757,9 @@ function App() {
                     onChange={(e) => setNewOrderCustomer(e.target.value)}
                   >
                     <option value="">{t('-- Choose Customer --')}</option>
-                    {customers.map((c) => (
+                    {filteredCustomers.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} ({c.email})
+                        {c.name} {c.phone ? `(${c.phone})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1420,7 +1791,7 @@ function App() {
                             <option value="">{t('-- Select Product --')}</option>
                             {products.map((p) => (
                               <option key={p.id} value={p.id} disabled={p.stock === 0}>
-                                {p.name} {p.stock === 0 ? '(OUT OF STOCK)' : `(SKU: ${p.sku} | $${parseFloat(p.price).toFixed(2)} | Stock: ${p.stock})`}
+                                {p.name} {p.stock === 0 ? '(OUT OF STOCK)' : `(SKU: ${p.sku} | ₹${parseFloat(p.price).toFixed(2)} | Stock: ${p.stock})`}
                               </option>
                             ))}
                           </select>

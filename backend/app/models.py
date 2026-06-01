@@ -15,6 +15,8 @@ class Product(Base):
 
     # Relationships
     order_items = relationship("OrderItem", back_populates="product")
+    added_by_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    added_by = relationship("Customer")
 
 class Customer(Base):
     __tablename__ = "customers"
@@ -22,10 +24,14 @@ class Customer(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=True)  # nullable for Google OAuth users
     phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    added_by_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    added_by = relationship("Customer", remote_side=[id])
 
     # Relationships
-    orders = relationship("Order", back_populates="customer", cascade="all, delete-orphan")
+    orders = relationship("Order", back_populates="customer", cascade="all, delete-orphan", foreign_keys="[Order.customer_id]")
 
 class Order(Base):
     __tablename__ = "orders"
@@ -35,9 +41,11 @@ class Order(Base):
     status = Column(String, nullable=False, default="pending")  # pending, completed, cancelled
     total_price = Column(Numeric(10, 2), nullable=False, default=0.00)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    added_by_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
-    customer = relationship("Customer", back_populates="orders")
+    customer = relationship("Customer", back_populates="orders", foreign_keys=[customer_id])
+    added_by = relationship("Customer", foreign_keys=[added_by_id])
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 
 class OrderItem(Base):

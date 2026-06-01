@@ -4,11 +4,19 @@ import datetime
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from decimal import Decimal
+import bcrypt  # type: ignore
 
 from .database import engine, Base, get_db
 from . import models, schemas
+
+# Password hashing helpers using bcrypt directly
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 # Initialize database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -68,7 +76,7 @@ def google_login(payload: schemas.GoogleLoginRequest, db: Session = Depends(get_
     # Ensure the user is registered in the database as a Customer for testing
     customer = db.query(models.Customer).filter(models.Customer.email == email).first()
     if not customer:
-        customer = models.Customer(name=name, email=email, phone="Google Sign-In")
+        customer = models.Customer(name=name, email=email)
         db.add(customer)
         db.commit()
         db.refresh(customer)
@@ -89,6 +97,68 @@ def google_login(payload: schemas.GoogleLoginRequest, db: Session = Depends(get_
             "name": name,
             "email": email
         }
+    }
+
+
+# --- SIGNUP ENDPOINT ---
+@app.post("/auth/signup", response_model=schemas.AuthResponse, status_code=201)
+def signup(payload: schemas.SignupRequest, db: Session = Depends(get_db)):
+    """
+    Registers a new user with name, email, and bcrypt-hashed password.
+    Returns a JWT on success.
+    """
+    # Check if email already taken
+    existing = db.query(models.Customer).filter(models.Customer.email == payload.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    hashed_pw = hash_password(payload.password)
+    customer = models.Customer(
+        name=payload.name,
+        email=payload.email,
+        hashed_password=hashed_pw
+    )
+    db.add(customer)
+    db.commit()
+    db.refresh(customer)
+
+    expire = datetime.datetime.utcnow() + datetime.timedelta(days=7)
+    access_token = jwt.encode(
+        {"sub": customer.email, "name": customer.name, "id": customer.id, "exp": expire},
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {"id": customer.id, "name": customer.name, "email": customer.email}
+    }
+
+
+# --- LOGIN ENDPOINT ---
+@app.post("/auth/login", response_model=schemas.AuthResponse)
+def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
+    """
+    Authenticates a user by email and password.
+    Returns a JWT on success.
+    """
+    customer = db.query(models.Customer).filter(models.Customer.email == payload.email).first()
+    if not customer or not customer.hashed_password:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not verify_password(payload.password, customer.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    expire = datetime.datetime.utcnow() + datetime.timedelta(days=7)
+    access_token = jwt.encode(
+        {"sub": customer.email, "name": customer.name, "id": customer.id, "exp": expire},
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {"id": customer.id, "name": customer.name, "email": customer.email}
     }
 
 
@@ -118,10 +188,13 @@ def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)
     return new_product
 
 @app.put("/products/{product_id}", response_model=schemas.ProductResponse)
-def update_product(product_id: int, updated: schemas.ProductUpdate, db: Session = Depends(get_db)):
+def update_product(product_id: int, updated: schemas.ProductUpdate, user_id: Optional[int] = None, db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+        
+    if product.added_by_id and product.added_by_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the user who added this product can edit it")
     
     # Check if SKU is changing and unique
     if updated.sku and updated.sku != product.sku:
@@ -137,10 +210,13 @@ def update_product(product_id: int, updated: schemas.ProductUpdate, db: Session 
     return product
 
 @app.delete("/products/{product_id}", status_code=204)
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(product_id: int, user_id: Optional[int] = None, db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+        
+    if product.added_by_id and product.added_by_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the user who added this product can delete it")
     
     # Check if product has orders
     has_orders = db.query(models.OrderItem).filter(models.OrderItem.product_id == product_id).first()
@@ -166,10 +242,11 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 @app.post("/customers", response_model=schemas.CustomerResponse, status_code=201)
 def create_customer(customer: schemas.CustomerCreate, db: Session = Depends(get_db)):
-    # Check unique Email
-    db_customer = db.query(models.Customer).filter(models.Customer.email == customer.email).first()
-    if db_customer:
-        raise HTTPException(status_code=400, detail="Customer with this email already exists")
+    # Check unique Email if provided
+    if customer.email:
+        db_customer = db.query(models.Customer).filter(models.Customer.email == customer.email).first()
+        if db_customer:
+            raise HTTPException(status_code=400, detail="Customer with this email already exists")
         
     new_customer = models.Customer(**customer.model_dump())
     db.add(new_customer)
@@ -178,13 +255,16 @@ def create_customer(customer: schemas.CustomerCreate, db: Session = Depends(get_
     return new_customer
 
 @app.put("/customers/{customer_id}", response_model=schemas.CustomerResponse)
-def update_customer(customer_id: int, updated: schemas.CustomerCreate, db: Session = Depends(get_db)):
+def update_customer(customer_id: int, updated: schemas.CustomerCreate, user_id: Optional[int] = None, db: Session = Depends(get_db)):
     customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
         
-    # Check unique Email if it's changing
-    if updated.email != customer.email:
+    if customer.added_by_id and customer.added_by_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the user who added this customer can edit them")
+        
+    # Check unique Email if it's changing and provided
+    if updated.email and updated.email != customer.email:
         db_email = db.query(models.Customer).filter(models.Customer.email == updated.email).first()
         if db_email:
             raise HTTPException(status_code=400, detail="Customer with this email already exists")
@@ -197,11 +277,14 @@ def update_customer(customer_id: int, updated: schemas.CustomerCreate, db: Sessi
     return customer
 
 @app.delete("/customers/{customer_id}", status_code=204)
-def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+def delete_customer(customer_id: int, user_id: Optional[int] = None, db: Session = Depends(get_db)):
     customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
         
+    if customer.added_by_id and customer.added_by_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the user who added this customer can delete them")
+
     db.delete(customer)
     db.commit()
     return None
@@ -269,7 +352,8 @@ def create_order(order_payload: schemas.OrderCreate, db: Session = Depends(get_d
         new_order = models.Order(
             customer_id=customer.id,
             status="completed",  # Complete since transaction succeeded
-            total_price=total_order_price
+            total_price=total_order_price,
+            added_by_id=order_payload.added_by_id
         )
         db.add(new_order)
         db.flush()  # Generate Order ID
@@ -291,7 +375,7 @@ def create_order(order_payload: schemas.OrderCreate, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Failed to place order due to database error: {str(e)}")
 
 @app.put("/orders/{order_id}/status", response_model=schemas.OrderResponse)
-def update_order_status(order_id: int, payload: schemas.OrderUpdateStatus, db: Session = Depends(get_db)):
+def update_order_status(order_id: int, payload: schemas.OrderUpdateStatus, user_id: Optional[int] = None, db: Session = Depends(get_db)):
     """
     Updates the status of an order. 
     Premium feature: If an order is transitioned to 'cancelled', 
@@ -300,6 +384,9 @@ def update_order_status(order_id: int, payload: schemas.OrderUpdateStatus, db: S
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.added_by_id and order.added_by_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the user who placed this order can change its status")
 
     old_status = order.status
     new_status = payload.status.lower()
@@ -338,3 +425,31 @@ def update_order_status(order_id: int, payload: schemas.OrderUpdateStatus, db: S
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update order status: {str(e)}")
+
+@app.delete("/orders/{order_id}", status_code=204)
+def delete_order(order_id: int, user_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """
+    Deletes an order.
+    Premium feature: Automatically returns product inventory if the order wasn't already cancelled.
+    """
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.added_by_id and order.added_by_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the user who placed this order can delete it")
+
+    try:
+        # Restock products if order wasn't already cancelled
+        if order.status != "cancelled":
+            for item in order.items:
+                product = db.query(models.Product).with_for_update().filter(models.Product.id == item.product_id).first()
+                if product:
+                    product.stock += item.quantity
+
+        db.delete(order)
+        db.commit()
+        return None
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete order: {str(e)}")
