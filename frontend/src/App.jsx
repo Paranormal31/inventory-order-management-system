@@ -82,7 +82,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function App() {
   // Theme state
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState('light');
 
   // Auth State
   const [token, setToken] = useState(() => localStorage.getItem('token') || '');
@@ -139,11 +139,11 @@ function App() {
 
   const [expandedOrder, setExpandedOrder] = useState(null); // ID of order showing details
 
-  // Apply theme class
+  // Enforce Light theme
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    document.documentElement.setAttribute('data-theme', 'light');
+    localStorage.setItem('theme', 'light');
+  }, []);
 
   // Persist Active Tab
   useEffect(() => {
