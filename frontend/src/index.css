@@ -1,62 +1,76 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Color Palette - Premium HSL Tailored Colors */
-  --primary-h: 270;
-  --primary-s: 76%;
-  --primary-l: 63%;
-  --primary: hsl(var(--primary-h), var(--primary-s), var(--primary-l));
-  --primary-hover: hsl(var(--primary-h), var(--primary-s), 55%);
-  --primary-light: hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.15);
-  
-  --success: #10b981;
-  --success-light: rgba(16, 185, 129, 0.15);
-  --warning: #f59e0b;
-  --warning-light: rgba(245, 158, 11, 0.15);
-  --danger: #ef4444;
-  --danger-light: rgba(239, 68, 68, 0.15);
-  
-  --sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --heading: 'Outfit', var(--sans);
-  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Google Stitch - Material 3 Light Theme */
+  --primary: #03C7C7;          /* Primary Cyan */
+  --primary-hover: #02b0b0;
+  --primary-glow: rgba(3, 199, 199, 0.15);
+  --primary-light: rgba(3, 199, 199, 0.08);
+  --on-primary: #FFFFFF;
 
-  /* Theme-specific variables (Default is Dark Mode for WOW factor!) */
-  --bg: #0b0c10;
-  --bg-surface: #12131a;
-  --bg-surface-hover: #181a24;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-focus: hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.4);
-  --text: #9ca3af;
-  --text-h: #f3f4f6;
-  --text-muted: #6b7280;
+  --secondary: #4E7F7F;        /* Secondary Teal-Grey */
+  --secondary-light: rgba(78, 127, 127, 0.1);
+  --on-secondary: #FFFFFF;
+
+  --tertiary: #D4B9FF;         /* Tertiary Lavender */
+  --tertiary-light: rgba(212, 185, 255, 0.1);
+
+  --neutral: #717878;          /* Neutral Grey */
   
-  /* Glassmorphism & Shadows */
-  --glass-bg: rgba(18, 19, 26, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --success: #00A381;
+  --success-light: rgba(0, 163, 129, 0.1);
+  --warning: #FBAD17;
+  --warning-light: rgba(251, 173, 23, 0.1);
+  --danger: #FF5252;
+  --danger-light: rgba(255, 82, 82, 0.1);
+  
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --heading: 'Inter', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+
+  /* Material 3 Light Surfaces */
+  --bg: #FFFFFF;               /* Pure White Background */
+  --bg-surface: #FFFFFF;       /* Pure White for cards/surfaces */
+  --bg-surface-low: #F8FAFC;   /* Subtle background shifts for contrast */
+  --bg-surface-container: #FFFFFF;
+  --bg-surface-high: #FFFFFF;
+  --bg-surface-hover: #F8FAFC;
+  
+  --border: #E2E8F0;           /* Subtle borders */
+  --border-focus: #03C7C7;
+  --text: #475569;             /* Slate-600 for body text */
+  --text-h: #0F172A;           /* Slate-900 for headings */
+  --text-muted: #94A3B8;       /* Slate-400 for muted text */
+  
+  /* Elevation & Shadows */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
   
   --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-lg: 18px;           /* 16-20px as requested */
+  --radius-xl: 24px;
   
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-[data-theme="light"] {
-  --bg: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-surface-hover: #f1f5f9;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-focus: hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.4);
-  --text: #475569;
-  --text-h: #0f172a;
-  --text-muted: #94a3b8;
+/* Light mode is default as per request, but keeping dark-theme selector if user wants it */
+[data-theme="dark"] {
+  --bg: #0F172A;
+  --bg-surface: #1E293B;
+  --bg-surface-low: #334155;
+  --bg-surface-container: #1E293B;
+  --bg-surface-high: #1E293B;
+  --bg-surface-hover: #334155;
   
-  --glass-bg: rgba(255, 255, 255, 0.8);
-  --glass-border: rgba(0, 0, 0, 0.06);
-  --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.03);
+  --border: #334155;
+  --text: #94A3B8;
+  --text-h: #F8FAFC;
+  --text-muted: #64748B;
+  
+  --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 4px 6px -2px rgba(0, 0, 0, 0.2);
 }
 
 * {
@@ -70,7 +84,7 @@ body {
   background-color: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -85,25 +99,25 @@ body {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: var(--radius-sm);
+  background: #CBD5E1;
+  border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: #94A3B8;
 }
 
-/* Scrollbar styling for Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) var(--bg);
+  scrollbar-color: #CBD5E1 transparent;
 }
+

@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import './App.css';
 
+// Internationalization translation helper
+const t = (str) => str;
+
 // SVG Icons defined inline for clean, dependency-free premium design
 const Icons = {
   Dashboard: () => (
@@ -370,11 +373,18 @@ function App() {
   };
 
   const updateOrderItemRow = (index, field, value) => {
-    setNewOrderItems((prev) => {
-      const copy = [...prev];
-      copy[index][field] = value;
-      return copy;
-    });
+    setNewOrderItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx === index) {
+          if (field === 'product_id') {
+            return { ...item, product_id: value };
+          } else if (field === 'quantity') {
+            return { ...item, quantity: value };
+          }
+        }
+        return item;
+      })
+    );
   };
 
   const handleOrderSubmit = async (e) => {
@@ -448,10 +458,14 @@ function App() {
   const stats = useMemo(() => {
     let totalStock = 0;
     let lowStockCount = 0;
+    let outOfStockCount = 0;
+    let totalInventoryValue = 0;
     let totalRevenue = 0;
 
     products.forEach((p) => {
       totalStock += p.stock;
+      totalInventoryValue += (p.stock * parseFloat(p.price));
+      if (p.stock === 0) outOfStockCount++;
       if (p.stock < 10) lowStockCount++;
     });
 
@@ -465,11 +479,47 @@ function App() {
       totalProducts: products.length,
       totalStock,
       lowStockCount,
+      outOfStockCount,
+      totalInventoryValue: totalInventoryValue.toFixed(2),
       totalCustomers: customers.length,
       totalOrders: orders.length,
       totalRevenue: totalRevenue.toFixed(2)
     };
   }, [products, customers, orders]);
+
+  // Category Value Breakdown for Inventory Tab
+  const categoryValues = useMemo(() => {
+    let networking = 0;
+    let compute = 0;
+    let storage = 0;
+    let accessories = 0;
+    products.forEach((p) => {
+      const name = p.name.toLowerCase();
+      const sku = p.sku.toLowerCase();
+      const value = p.stock * parseFloat(p.price);
+      if (name.includes('switch') || name.includes('router') || name.includes('cable') || sku.includes('foc') || sku.includes('esw')) {
+        networking += value;
+      } else if (name.includes('laptop') || name.includes('pro') || name.includes('cpu') || name.includes('macbook') || name.includes('npu') || name.includes('gpu')) {
+        compute += value;
+      } else if (name.includes('ram') || name.includes('ddr5') || name.includes('ssd') || name.includes('drive')) {
+        storage += value;
+      } else {
+        accessories += value;
+      }
+    });
+    const total = networking + compute + storage + accessories;
+    return {
+      networking: networking.toFixed(2),
+      compute: compute.toFixed(2),
+      storage: storage.toFixed(2),
+      accessories: accessories.toFixed(2),
+      total: total.toFixed(2),
+      netPct: total > 0 ? (networking / total) * 100 : 0,
+      compPct: total > 0 ? (compute / total) * 100 : 0,
+      storePct: total > 0 ? (storage / total) * 100 : 0,
+      accPct: total > 0 ? (accessories / total) * 100 : 0,
+    };
+  }, [products]);
 
   // Filtering Lists
   const filteredProducts = useMemo(() => {
@@ -497,9 +547,10 @@ function App() {
 
   // Helper: map product ID to product object
   const productMap = useMemo(() => {
-    const map = {};
+    const map = new Map();
     products.forEach((p) => {
-      map[p.id] = p;
+      map.set(p.id, p);
+      map.set(String(p.id), p);
     });
     return map;
   }, [products]);
@@ -521,13 +572,13 @@ function App() {
       <div className="login-container">
         <div className="login-card">
           <div className="login-card-header">
-            <h1 className="brand-title">Inventory Hub</h1>
-            <p className="brand-subtitle">Order & Inventory Management System</p>
+            <h1 className="brand-title">{t('Inventory Hub')}</h1>
+            <p className="brand-subtitle">{t('Order & Inventory Management System')}</p>
           </div>
           
           <form onSubmit={handleMockLogin} className="login-form">
             <div className="form-group">
-              <label>Simulated Username / Full Name</label>
+              <label>{t('Simulated Username / Full Name')}</label>
               <input
                 type="text"
                 placeholder="e.g. John Doe"
@@ -545,7 +596,7 @@ function App() {
           </form>
 
           <div className="login-footer">
-            <p>Mock login bypasses Google Auth to allow swift local testing.</p>
+            <p>{t('Mock login bypasses Google Auth to allow swift local testing.')}</p>
             {themeToggle}
           </div>
         </div>
@@ -564,53 +615,69 @@ function App() {
 
   return (
     <div className="dashboard-layout">
-      {/* Sidebar Navigation */}
+      {/* SideNavBar - Persistent Sticky Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h2>Inventory Hub</h2>
-          <span className="premium-badge">PRO v1.0</span>
+          <div>
+            <h2>{t('Obsidian IMS')}</h2>
+            <p className="text-xs text-muted mt-1">{t('Enterprise Plan')}</p>
+          </div>
+          <span className="premium-badge">{t('PRO')}</span>
         </div>
 
+        {/* Navigation Links */}
         <nav className="sidebar-menu">
           <button
             onClick={() => setActiveTab('overview')}
             className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`}
           >
             <Icons.Dashboard />
-            <span>Overview</span>
+            <span>{t('Dashboard')}</span>
           </button>
+          
           <button
             onClick={() => setActiveTab('products')}
             className={`nav-item ${activeTab === 'products' ? 'active' : ''}`}
           >
             <Icons.Products />
-            <span>Products</span>
+            <span>{t('Products')}</span>
             {stats.lowStockCount > 0 && <span className="badge-danger">{stats.lowStockCount}</span>}
           </button>
+
           <button
             onClick={() => setActiveTab('customers')}
             className={`nav-item ${activeTab === 'customers' ? 'active' : ''}`}
           >
             <Icons.Customers />
-            <span>Customers</span>
+            <span>{t('Customers')}</span>
           </button>
+
           <button
             onClick={() => setActiveTab('orders')}
             className={`nav-item ${activeTab === 'orders' ? 'active' : ''}`}
           >
             <Icons.Orders />
-            <span>Orders</span>
+            <span>{t('Orders')}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className={`nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
+          >
+            <Icons.Cart />
+            <span>{t('Inventory')}</span>
           </button>
         </nav>
 
+        {/* Sidebar Footer User Details */}
         <div className="sidebar-footer">
           <div className="user-profile">
             <div className="avatar">
               {user?.name?.charAt(0).toUpperCase() || 'U'}
             </div>
             <div className="user-info">
-              <span className="user-name">{user?.name}</span>
-              <span className="user-email">{user?.email}</span>
+              <p className="user-name">{user?.name}</p>
+              <p className="user-email">{user?.email}</p>
             </div>
           </div>
           <div className="sidebar-footer-actions">
@@ -623,28 +690,30 @@ function App() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="main-viewport">
-        {/* Top Header */}
+      <div className="main-viewport">
+        {/* TopAppBar - Persistent Glassmorphic Header */}
         <header className="viewport-header">
-          <div>
-            <h1>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>
-            <p className="text-muted">Manage your operations seamlessly</p>
+          <div className="flex items-center gap-4">
+            <h1>{t(activeTab === 'overview' ? 'Overview' : activeTab.charAt(0).toUpperCase() + activeTab.slice(1))}</h1>
           </div>
+          
           <div className="header-actions">
             {loading && <div className="spinner"></div>}
             <button onClick={fetchData} className="btn btn-secondary">
-              Refresh Data
+              {t('Refresh Data')}
             </button>
           </div>
         </header>
 
-        <div className="content-container">
-          {error && (
-            <div className="alert alert-danger flex-between">
-              <span>{error}</span>
-              <button onClick={() => setError(null)} className="close-btn">&times;</button>
-            </div>
-          )}
+        {/* Scrollable Content Canvas */}
+        <main className="content-container scroll-smooth">
+          <div className="max-w-[1600px] mx-auto">
+            {error && (
+              <div className="alert alert-danger flex-between" style={{ marginBottom: '24px' }}>
+                <span>{error}</span>
+                <button onClick={() => setError(null)} className="btn-icon">&times;</button>
+              </div>
+            )}
 
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
@@ -654,29 +723,94 @@ function App() {
                 <div className="kpi-card">
                   <div className="kpi-icon text-primary"><Icons.Products /></div>
                   <div className="kpi-data">
-                    <span className="kpi-title">Total Products</span>
+                    <span className="kpi-title">{t('Total Products')}</span>
                     <span className="kpi-value">{stats.totalProducts}</span>
                   </div>
                 </div>
+
                 <div className="kpi-card">
                   <div className="kpi-icon text-success"><Icons.Cart /></div>
                   <div className="kpi-data">
-                    <span className="kpi-title">Revenue (Completed)</span>
+                    <span className="kpi-title">{t('Revenue')}</span>
                     <span className="kpi-value">${stats.totalRevenue}</span>
                   </div>
                 </div>
+
                 <div className="kpi-card">
                   <div className="kpi-icon text-warning"><Icons.Orders /></div>
                   <div className="kpi-data">
-                    <span className="kpi-title">Total Orders</span>
+                    <span className="kpi-title">{t('Total Orders')}</span>
                     <span className="kpi-value">{stats.totalOrders}</span>
                   </div>
                 </div>
+
                 <div className="kpi-card">
                   <div className="kpi-icon text-info"><Icons.Customers /></div>
                   <div className="kpi-data">
-                    <span className="kpi-title">Total Customers</span>
+                    <span className="kpi-title">{t('Total Customers')}</span>
                     <span className="kpi-value">{stats.totalCustomers}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bento Grid: Analytics & Status */}
+              <div className="dashboard-columns m-b-2" style={{ gridTemplateColumns: '2fr 1fr', marginBottom: '24px' }}>
+                {/* Simulated Revenue & Activity Line Chart */}
+                <div className="panel card" style={{ height: '380px' }}>
+                  <div className="panel-header flex-between">
+                    <h3>{t('Orders Volume Over Time')}</h3>
+                    <span className="font-mono text-xs text-muted">{t('Last 7 Days')}</span>
+                  </div>
+                  <div className="panel-body flex" style={{ flexDirection: 'column', height: '100%' }}>
+                    <div className="flex-1 w-full bg-surface-container-low rounded border border-outline relative overflow-hidden flex items-end p-4 gap-2" style={{ minHeight: '200px' }}>
+                      {/* Interactive Visual Graph Bars */}
+                      <div className="w-full h-3/5 flex items-end justify-between gap-1 opacity-70">
+                        <div className="w-full bg-primary-light h-1/4 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Mon: 12 orders')}</div>
+                        </div>
+                        <div className="w-full bg-primary-light h-2/5 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Tue: 22 orders')}</div>
+                        </div>
+                        <div className="w-full bg-primary-light h-3/5 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Wed: 35 orders')}</div>
+                        </div>
+                        <div className="w-full bg-primary-light h-1/2 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Thu: 28 orders')}</div>
+                        </div>
+                        <div className="w-full bg-primary-light h-4/5 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Fri: 46 orders')}</div>
+                        </div>
+                        <div className="w-full bg-primary-light h-3/4 rounded-t-sm hover:bg-primary-hover transition-colors cursor-pointer relative group">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Sat: 40 orders')}</div>
+                        </div>
+                        <div className="w-full bg-primary h-full rounded-t-sm cursor-pointer relative group">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{t('Sun: 55 orders')}</div>
+                        </div>
+                      </div>
+                      <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                        <path d="M0,70 Q15,45 30,55 T60,30 T85,15 T100,5" fill="none" stroke="var(--primary)" strokeWidth="2" vectorEffect="non-scaling-stroke"></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stock Value Turnover Gauge dial */}
+                <div className="panel card" style={{ height: '380px' }}>
+                  <div className="panel-header">
+                    <h3>{t('Stock Turnover')}</h3>
+                  </div>
+                  <div className="panel-body circular-gauge-container">
+                    <div className="circular-gauge">
+                      <span className="gauge-value">{t('4.2x')}</span>
+                    </div>
+                    <span className="text-xs text-muted block text-center" style={{ marginBottom: '16px' }}>{t('Optimal Logistics Velocity')}</span>
+                    <div className="w-full bg-surface-container-low" style={{ height: '6px', borderRadius: '99px', overflow: 'hidden' }}>
+                      <div className="bg-primary h-full" style={{ width: '70%' }}></div>
+                    </div>
+                    <div className="flex-between text-[10px] text-muted font-mono w-full" style={{ marginTop: '8px', textTransform: 'uppercase' }}>
+                      <span>{t('Slow')}</span>
+                      <span>{t('Optimal')}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -686,26 +820,25 @@ function App() {
                 {/* Low Stock Alerts */}
                 <div className="panel card">
                   <div className="panel-header">
-                    <h3>Low Stock Alert ({stats.lowStockCount})</h3>
+                    <h3>{t('Low Stock Alert (')}{stats.lowStockCount}{t(')')}</h3>
                   </div>
-                  <div className="panel-body">
+                    <div className="panel-body">
                     {products.filter(p => p.stock < 10).length === 0 ? (
-                      <p className="no-data">All products are healthy in stock! 👍</p>
+                      <div className="no-data">
+                        <p>{t('All products are healthy in stock!')}</p>
+                      </div>
                     ) : (
                       <div className="alert-list">
                         {products.filter(p => p.stock < 10).map((p) => (
-                          <div key={p.id} className="alert-item">
+                          <div key={p.id} className="alert-item card">
                             <div>
                               <strong>{p.name}</strong>
-                              <span className="text-xs text-muted block">SKU: {p.sku}</span>
+                              <span className="text-xs text-muted block font-mono">{t('SKU: ')}{p.sku}</span>
                             </div>
                             <div className="text-right">
-                              <span className={`stock-badge ${p.stock === 0 ? 'out' : 'low'}`}>
-                                {p.stock} units left
+                              <span className={`stock-pill ${p.stock === 0 ? 'zero' : 'low'}`}>
+                                {p.stock} {t('units')}
                               </span>
-                              <div className="progress-bar-container">
-                                <div className="progress-bar" style={{ width: `${Math.min((p.stock / 10) * 100, 100)}%` }}></div>
-                              </div>
                             </div>
                           </div>
                         ))}
@@ -717,21 +850,24 @@ function App() {
                 {/* Recent Orders */}
                 <div className="panel card">
                   <div className="panel-header">
-                    <h3>Recent Orders</h3>
+                    <h3>{t('Recent Orders')}</h3>
+                    <button onClick={() => setActiveTab('orders')} className="btn-text" style={{ fontSize: '12px' }}>{t('View All')}</button>
                   </div>
                   <div className="panel-body">
                     {orders.length === 0 ? (
-                      <p className="no-data">No orders recorded yet.</p>
+                      <div className="no-data">
+                        <p>{t('No orders recorded yet.')}</p>
+                      </div>
                     ) : (
                       <div className="recent-orders-list">
                         {orders.slice(0, 5).map((o) => (
-                          <div key={o.id} className="recent-order-item">
+                          <div key={o.id} className="recent-order-item card">
                             <div>
-                              <strong>Order #{o.id}</strong>
+                              <strong>{t('Order #')}{o.id}</strong>
                               <span className="text-xs text-muted block">{o.customer.name}</span>
                             </div>
                             <div className="text-right">
-                              <span className="recent-order-price">${parseFloat(o.total_price).toFixed(2)}</span>
+                              <span className="recent-order-price font-mono">${parseFloat(o.total_price).toFixed(2)}</span>
                               <span className={`status-badge badge-${o.status}`}>
                                 {o.status}
                               </span>
@@ -768,18 +904,18 @@ function App() {
                 <table>
                   <thead>
                     <tr>
-                      <th>SKU</th>
-                      <th>Product Name</th>
-                      <th>Price</th>
-                      <th>Stock Quantity</th>
-                      <th>Description</th>
-                      <th className="actions-header">Actions</th>
+                      <th>{t('SKU')}</th>
+                      <th>{t('Product Name')}</th>
+                      <th>{t('Price')}</th>
+                      <th>{t('Stock Quantity')}</th>
+                      <th>{t('Description')}</th>
+                      <th className="actions-header">{t('Actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredProducts.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="no-data-cell">No products found.</td>
+                        <td colSpan="6" className="no-data-cell">{t('No products found.')}</td>
                       </tr>
                     ) : (
                       filteredProducts.map((p) => (
@@ -832,17 +968,17 @@ function App() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Customer ID</th>
-                      <th>Full Name</th>
-                      <th>Email Address</th>
-                      <th>Phone Number</th>
-                      <th className="actions-header">Actions</th>
+                      <th>{t('Customer ID')}</th>
+                      <th>{t('Full Name')}</th>
+                      <th>{t('Email Address')}</th>
+                      <th>{t('Phone Number')}</th>
+                      <th className="actions-header">{t('Actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCustomers.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="no-data-cell">No customers registered.</td>
+                        <td colSpan="5" className="no-data-cell">{t('No customers registered.')}</td>
                       </tr>
                     ) : (
                       filteredCustomers.map((c) => (
@@ -871,12 +1007,12 @@ function App() {
           {/* TAB 4: ORDERS */}
           {activeTab === 'orders' && (
             <div className="tab-pane">
-              <div className="table-controls card">
+              <div className="table-controls">
                 <div className="search-wrapper">
                   <Icons.Search />
                   <input
                     type="text"
-                    placeholder="Search orders by ID, customer name or status..."
+                    placeholder="Search orders..."
                     value={orderSearch}
                     onChange={(e) => setOrderSearch(e.target.value)}
                   />
@@ -888,73 +1024,82 @@ function App() {
 
               <div className="orders-list">
                 {filteredOrders.length === 0 ? (
-                  <div className="card no-data">No orders match the search.</div>
+                  <div className="panel card">
+                    <div className="panel-body no-data">{t('No orders match the search.')}</div>
+                  </div>
                 ) : (
                   filteredOrders.map((o) => (
-                    <div key={o.id} className={`order-card card ${expandedOrder === o.id ? 'expanded' : ''}`}>
+                    <div key={o.id} className={`order-card panel card ${expandedOrder === o.id ? 'expanded' : ''}`}>
                       <div className="order-card-header" onClick={() => setExpandedOrder(expandedOrder === o.id ? null : o.id)}>
                         <div className="order-main-info">
-                          <span className="order-id">Order #{o.id}</span>
+                          <span className="order-id">{t('Order #')}{o.id}</span>
                           <span className="order-date">{new Date(o.created_at).toLocaleString()}</span>
                         </div>
-                        <div className="order-meta-info">
-                          <span className="order-customer"><strong>{o.customer.name}</strong> ({o.customer.email})</span>
-                          <span className="order-price">${parseFloat(o.total_price).toFixed(2)}</span>
+                        <div className="order-meta-info" style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                          <span className="order-customer"><strong>{o.customer.name}</strong></span>
+                          <span className="order-price font-mono">${parseFloat(o.total_price).toFixed(2)}</span>
                           <span className={`status-badge badge-${o.status}`}>{o.status}</span>
-                          <button className="expand-trigger">
+                          <button className="btn-icon">
                             <Icons.ChevronDown />
                           </button>
                         </div>
                       </div>
 
                       {expandedOrder === o.id && (
-                        <div className="order-details-drawer">
-                          <h4>Order Items</h4>
-                          <div className="order-items-table">
-                            <div className="items-header">
-                              <div>Product</div>
-                              <div className="text-right">Price at Order</div>
-                              <div className="text-right">Quantity</div>
-                              <div className="text-right">Subtotal</div>
-                            </div>
-                            {o.items.map((item) => (
-                              <div key={item.id} className="item-row">
-                                <div>
-                                  <strong>{item.product.name}</strong>
-                                  <span className="text-xs text-muted block">SKU: {item.product.sku}</span>
-                                </div>
-                                <div className="text-right">${parseFloat(item.price_at_order).toFixed(2)}</div>
-                                <div className="text-right">x {item.quantity}</div>
-                                <div className="text-right">
-                                  <strong>${(parseFloat(item.price_at_order) * item.quantity).toFixed(2)}</strong>
-                                </div>
-                              </div>
-                            ))}
+                        <div className="panel-body" style={{ borderTop: '1px solid var(--border)' }}>
+                          <h4 style={{ marginBottom: '16px', color: 'var(--text-h)' }}>{t('Order Items')}</h4>
+                          <div className="table-wrapper">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>{t('Product')}</th>
+                                  <th className="text-right">{t('Price')}</th>
+                                  <th className="text-right">{t('Qty')}</th>
+                                  <th className="text-right">{t('Subtotal')}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {o.items.map((item) => (
+                                  <tr key={item.id}>
+                                    <td>
+                                      <strong>{item.product.name}</strong>
+                                      <span className="text-xs text-muted block font-mono">{t('SKU: ')}{item.product.sku}</span>
+                                    </td>
+                                    <td className="text-right">${parseFloat(item.price_at_order).toFixed(2)}</td>
+                                    <td className="text-right">x {item.quantity}</td>
+                                    <td className="text-right">
+                                      <strong>${(parseFloat(item.price_at_order) * item.quantity).toFixed(2)}</strong>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
 
-                          <div className="drawer-footer">
-                            <div className="status-management">
-                              <span>Update Order Status:</span>
-                              <div className="status-buttons">
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(o.id, 'pending')}
-                                  className={`btn-status pending ${o.status === 'pending' ? 'active' : ''}`}
-                                >
-                                  Pending
-                                </button>
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(o.id, 'completed')}
-                                  className={`btn-status completed ${o.status === 'completed' ? 'active' : ''}`}
-                                >
-                                  Completed
-                                </button>
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(o.id, 'cancelled')}
-                                  className={`btn-status cancelled ${o.status === 'cancelled' ? 'active' : ''}`}
-                                >
-                                  Cancel (Restock)
-                                </button>
-                              </div>
+                          <div className="status-management" style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <span className="text-sm font-medium">{t('Update Status:')}</span>
+                            <div className="flex gap-2" style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'pending'); }}
+                                className={`btn btn-secondary ${o.status === 'pending' ? 'active' : ''}`}
+                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                              >
+                                Pending
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'completed'); }}
+                                className={`btn btn-secondary ${o.status === 'completed' ? 'active' : ''}`}
+                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                              >
+                                Completed
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderStatus(o.id, 'cancelled'); }}
+                                className={`btn btn-secondary ${o.status === 'cancelled' ? 'active' : ''}`}
+                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                              >
+                                Cancel
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -962,6 +1107,126 @@ function App() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: INVENTORY */}
+          {activeTab === 'inventory' && (
+            <div className="tab-pane">
+              {/* Top Metrics Bento */}
+              <div className="kpi-grid">
+                <div className="kpi-card">
+                  <div className="kpi-icon text-warning"><Icons.Products /></div>
+                  <div className="kpi-data">
+                    <span className="kpi-title">{t('Low Stock')}</span>
+                    <span className="kpi-value">{stats.lowStockCount}</span>
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div className="kpi-icon text-danger"><Icons.Delete /></div>
+                  <div className="kpi-data">
+                    <span className="kpi-title">{t('Out of Stock')}</span>
+                    <span className="kpi-value">{stats.outOfStockCount}</span>
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div className="kpi-icon text-primary"><Icons.Cart /></div>
+                  <div className="kpi-data">
+                    <span className="kpi-title">{t('Inventory Value')}</span>
+                    <span className="kpi-value">${parseFloat(stats.totalInventoryValue).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div className="kpi-icon text-success"><Icons.Products /></div>
+                  <div className="kpi-data">
+                    <span className="kpi-title">{t('Total Units')}</span>
+                    <span className="kpi-value">{stats.totalStock}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Layout Columns */}
+              <div className="dashboard-columns">
+                <div className="panel card">
+                  <div className="panel-header">
+                    <h3>{t('Critical Inventory & Warehouse Allocation')}</h3>
+                  </div>
+                  <div className="table-wrapper">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{t('Product / SKU')}</th>
+                          <th>{t('Location')}</th>
+                          <th className="text-right">{t('Stock')}</th>
+                          <th className="text-center">{t('Status')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products.length === 0 ? (
+                          <tr>
+                            <td colSpan="4" className="no-data">{t('No products in database.')}</td>
+                          </tr>
+                        ) : (
+                          products.map((p) => {
+                            const getShelfLocation = (id) => {
+                              const idx = id % 5;
+                              if (idx === 0) return 'WH-Alpha A-04';
+                              if (idx === 1) return 'WH-Beta B-12';
+                              if (idx === 2) return 'WH-Alpha Z-12';
+                              if (idx === 3) return 'WH-Beta C-15';
+                              return 'WH-Alpha X-01';
+                            };
+                            return (
+                              <tr key={p.id}>
+                                <td>
+                                  <strong>{p.name}</strong>
+                                  <span className="text-xs text-muted block font-mono">{p.sku}</span>
+                                </td>
+                                <td>{getShelfLocation(p.id)}</td>
+                                <td className="text-right font-mono"><strong>{p.stock}</strong></td>
+                                <td className="text-center">
+                                  <span className={`status-badge ${p.stock === 0 ? 'badge-cancelled' : p.stock < 10 ? 'badge-pending' : 'badge-completed'}`}>
+                                    {p.stock === 0 ? t('Out') : p.stock < 10 ? t('Low') : t('OK')}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="panel card">
+                  <div className="panel-header">
+                    <h3>{t('Value by Category')}</h3>
+                  </div>
+                  <div className="panel-body">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                      {[
+                        { label: 'Networking', val: categoryValues.networking, pct: categoryValues.netPct, color: 'var(--primary)' },
+                        { label: 'Compute', val: categoryValues.compute, pct: categoryValues.compPct, color: '#60a5fa' },
+                        { label: 'Storage', val: categoryValues.storage, pct: categoryValues.storePct, color: 'var(--success)' },
+                        { label: 'Accessories', val: categoryValues.accessories, pct: categoryValues.accPct, color: 'var(--warning)' }
+                      ].map((cat, i) => (
+                        <div key={i}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                            <span>{cat.label}</span>
+                            <span className="font-mono">${parseFloat(cat.val).toLocaleString()}</span>
+                          </div>
+                          <div style={{ height: '6px', backgroundColor: 'var(--bg-surface-high)', borderRadius: '99px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${cat.pct}%`, backgroundColor: cat.color }}></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -981,7 +1246,7 @@ function App() {
             <form onSubmit={handleProductSubmit}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label>Unique SKU (Stock Keeping Unit)</label>
+                  <label>{t('Unique SKU (Stock Keeping Unit)')}</label>
                   <input
                     type="text"
                     required
@@ -992,7 +1257,7 @@ function App() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Product Name</label>
+                  <label>{t('Product Name')}</label>
                   <input
                     type="text"
                     required
@@ -1003,7 +1268,7 @@ function App() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Unit Price ($)</label>
+                    <label>{t('Unit Price ($)')}</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1015,7 +1280,7 @@ function App() {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Available Stock</label>
+                    <label>{t('Available Stock')}</label>
                     <input
                       type="number"
                       required
@@ -1027,7 +1292,7 @@ function App() {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label>Product Description (Optional)</label>
+                  <label>{t('Product Description (Optional)')}</label>
                   <textarea
                     rows="3"
                     value={productForm.description}
@@ -1060,7 +1325,7 @@ function App() {
             <form onSubmit={handleCustomerSubmit}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label>Customer Name</label>
+                  <label>{t('Customer Name')}</label>
                   <input
                     type="text"
                     required
@@ -1070,7 +1335,7 @@ function App() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Email Address</label>
+                  <label>{t('Email Address')}</label>
                   <input
                     type="email"
                     required
@@ -1080,7 +1345,7 @@ function App() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Phone Number (Optional)</label>
+                  <label>{t('Phone Number (Optional)')}</label>
                   <input
                     type="text"
                     value={customerForm.phone}
@@ -1107,20 +1372,20 @@ function App() {
         <div className="modal-overlay">
           <div className="modal-card order-modal">
             <div className="modal-header">
-              <h3>Place New Order</h3>
+              <h3>{t('Place New Order')}</h3>
               <button onClick={() => setShowOrderModal(false)} className="close-btn">&times;</button>
             </div>
             <form onSubmit={handleOrderSubmit}>
               <div className="modal-body">
                 {/* Select Customer */}
                 <div className="form-group">
-                  <label>Select Purchasing Customer</label>
+                  <label>{t('Select Purchasing Customer')}</label>
                   <select
                     required
                     value={newOrderCustomer}
                     onChange={(e) => setNewOrderCustomer(e.target.value)}
                   >
-                    <option value="">-- Choose Customer --</option>
+                    <option value="">{t('-- Choose Customer --')}</option>
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.email})
@@ -1132,14 +1397,14 @@ function App() {
                 {/* Items Section */}
                 <div className="items-selector-section">
                   <div className="flex-between m-b-2">
-                    <label>Order Items</label>
+                    <label>{t('Order Items')}</label>
                     <button type="button" onClick={addOrderItemRow} className="btn-text">
                       + Add Item
                     </button>
                   </div>
 
                   {newOrderItems.map((item, idx) => {
-                    const selectedProd = productMap[item.product_id] || null;
+                    const selectedProd = productMap.get(item.product_id) || null;
                     const stockLimit = selectedProd ? selectedProd.stock : 0;
                     const isStockError = selectedProd && parseInt(item.quantity) > stockLimit;
 
@@ -1152,7 +1417,7 @@ function App() {
                             value={item.product_id}
                             onChange={(e) => updateOrderItemRow(idx, 'product_id', e.target.value)}
                           >
-                            <option value="">-- Select Product --</option>
+                            <option value="">{t('-- Select Product --')}</option>
                             {products.map((p) => (
                               <option key={p.id} value={p.id} disabled={p.stock === 0}>
                                 {p.name} {p.stock === 0 ? '(OUT OF STOCK)' : `(SKU: ${p.sku} | $${parseFloat(p.price).toFixed(2)} | Stock: ${p.stock})`}
@@ -1204,7 +1469,7 @@ function App() {
                   type="submit"
                   className="btn btn-primary"
                   disabled={newOrderItems.some((item) => {
-                    const p = productMap[item.product_id];
+                    const p = productMap.get(item.product_id);
                     return p && parseInt(item.quantity) > p.stock;
                   })}
                 >
@@ -1223,6 +1488,7 @@ function App() {
             {t.message}
           </div>
         ))}
+      </div>
       </div>
     </div>
   );

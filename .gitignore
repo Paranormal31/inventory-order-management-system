@@ -44,3 +44,7 @@ Thumbs.db
 # Media files & mockups
 WhatsApp Image*.jpeg
 
+# Local artifacts and context
+cache/
+context.md
+

@@ -1,12 +1,82 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>Inventory Hub | Premium IMS</title>
+    
+    <!-- Tailwind CSS CDN and Material Symbols Font integration -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+    
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+              "background": "#FFFFFF",
+              "error": "#FF5252",
+              "error-container": "#FFDAD6",
+              "inverse-on-surface": "#F1F0F4",
+              "inverse-primary": "#00E0E0",
+              "inverse-surface": "#2F3033",
+              "on-background": "#191C1E",
+              "on-error": "#FFFFFF",
+              "on-error-container": "#410002",
+              "on-primary": "#FFFFFF",
+              "on-primary-container": "#002020",
+              "on-primary-fixed": "#002020",
+              "on-primary-fixed-variant": "#004F4F",
+              "on-secondary": "#FFFFFF",
+              "on-secondary-container": "#051F1F",
+              "on-secondary-fixed": "#051F1F",
+              "on-secondary-fixed-variant": "#324B4B",
+              "on-surface": "#191C1E",
+              "on-surface-variant": "#404848",
+              "on-tertiary": "#FFFFFF",
+              "on-tertiary-container": "#241544",
+              "on-tertiary-fixed": "#241544",
+              "on-tertiary-fixed-variant": "#544376",
+              "outline": "#707979",
+              "outline-variant": "#BFC8C8",
+              "primary": "#03C7C7",
+              "primary-container": "#97F0F0",
+              "primary-fixed": "#97F0F0",
+              "primary-fixed-dim": "#7ADADA",
+              "secondary": "#4E7F7F",
+              "secondary-container": "#D1E5E5",
+              "secondary-fixed": "#D1E5E5",
+              "secondary-fixed-dim": "#B5C9C9",
+              "surface": "#F8FAFC",
+              "surface-bright": "#F8FAFC",
+              "surface-container": "#FFFFFF",
+              "surface-container-high": "#FFFFFF",
+              "surface-container-highest": "#E1E2E5",
+              "surface-container-low": "#F1F5F9",
+              "surface-container-lowest": "#FFFFFF",
+              "surface-dim": "#D9DADD",
+              "surface-tint": "#03C7C7",
+              "surface-variant": "#DAE4E4",
+              "tertiary": "#D4B9FF",
+              "tertiary-container": "#E9DDFF",
+              "tertiary-fixed": "#E9DDFF",
+              "tertiary-fixed-dim": "#D0BCFF"
+            },
+            "fontFamily": {
+              "sans": ["Inter", "sans-serif"],
+              "headline": ["Inter", "sans-serif"],
+              "body": ["Inter", "sans-serif"],
+              "mono": ["ui-monospace", "monospace"]
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
+  <body class="bg-background text-on-surface">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
